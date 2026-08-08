@@ -14,6 +14,7 @@ import StatCard from "../components/StatCard";
 import ChartCard from "../components/ChartCard";
 import Modal from "../components/Modal";
 import { apiRequest } from "../lib/api";
+import { HOSTEL_LIST } from "../data/mockData";
 
 const money = (value) => `Rs ${Number(value || 0).toLocaleString("en-IN")}`;
 const COLORS = ["#2563EB", "#22C55E", "#F59E0B", "#EF4444", "#7C3AED", "#0EA5E9"];
@@ -157,7 +158,7 @@ export default function MessFeeManagement() {
     loadData();
   }, []);
 
-  const hostels = useMemo(() => [...new Set(rows.map((row) => row.hostel).filter(Boolean))], [rows]);
+  const hostels = useMemo(() => [...new Set([...HOSTEL_LIST, ...rows.map((row) => row.hostel).filter(Boolean)])], [rows]);
   const filteredRows = useMemo(() => rows.filter((row) => {
     const searchable = [row.student_name, row.registration_number, row.admission_number, row.room_number, row.mobile, row.hostel, row.month].join(" ").toLowerCase();
     return searchable.includes(query.toLowerCase())

@@ -306,7 +306,7 @@ export default function Dashboard() {
               {dashboardStats.todayAttendance} students checked in today
             </h1>
             <p className="text-slate-500 text-sm mt-2 max-w-lg">
-              That's {Math.round((dashboardStats.todayAttendance / dashboardStats.totalStudents) * 100)}% of your registered hostel strength across Vaidehi Hostel and Mahila Hostel.
+              That's {dashboardStats.totalStudents ? Math.round((dashboardStats.todayAttendance / dashboardStats.totalStudents) * 100) : 0}% of your registered hostel strength across Vaidehi Hostel and Mahila Hostel.
             </p>
           </div>
           <div className="flex gap-3">

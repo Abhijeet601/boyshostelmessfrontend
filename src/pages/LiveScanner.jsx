@@ -870,7 +870,6 @@ function SidePanel({
   status,
   message,
   errorState,
-  meal,
   scanCounts,
   cameraFps,
   cameras,
@@ -1359,7 +1358,6 @@ export default function LiveScanner() {
             status={status}
             message={message}
             errorState={errorState}
-            meal={meal}
             scanCounts={scanCounts}
             cameraFps={CAMERA_TARGET_FPS}
             cameras={cameras}

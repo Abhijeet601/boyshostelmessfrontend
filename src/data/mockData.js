@@ -260,7 +260,7 @@ export const paymentAnalytics = (() => {
     monthlyCollection: paid.reduce((sum, payment) => sum + payment.total, 0),
     totalOutstanding: currentMonth.filter((payment) => payment.status !== "Paid").reduce((sum, payment) => sum + payment.total, 0),
     totalRevenue: allPaid.reduce((sum, payment) => sum + payment.total, 0),
-    collectionPercent: Math.round((paid.length / currentMonth.length) * 100),
+    collectionPercent: currentMonth.length ? Math.round((paid.length / currentMonth.length) * 100) : 0,
   };
 })();
 

@@ -70,9 +70,9 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Splash />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/super-admin/login" element={<Login portal="super-admin" />} />
-      <Route path="/admin/login" element={<Login portal="admin" />} />
-      <Route path="/student/login" element={<Login portal="student" />} />
+      <Route path="/super-admin/login" element={<Navigate to="/login" replace />} />
+      <Route path="/admin/login" element={<Navigate to="/login" replace />} />
+      <Route path="/student/login" element={<Navigate to="/login" replace />} />
       <Route path="/403" element={<AccessDenied />} />
       <>{PortalRoutes({ portal: "super-admin" })}</>
       <>{PortalRoutes({ portal: "admin" })}</>

@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowRight, GraduationCap, Lock, Mail, QrCode, ShieldCheck, Sparkles,
-  ScanLine, University, Users, UtensilsCrossed,
+  ScanLine, University, Users,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useApp } from "../context/AppContext";
-import { apiRequest, saveSession } from "../lib/api";
+import { apiRequest, clearSession, saveSession } from "../lib/api";
 
 const PORTALS = {
   "super-admin": {
@@ -54,44 +54,64 @@ const PORTALS = {
   },
 };
 
-export default function Login({ portal }) {
+const DEFAULT_LOGIN_CONFIG = {
+  title: "Mess ERP Login",
+  eyebrow: "Magadh Mahila College Hostel Mess ERP",
+  description: "Use your issued Login ID. Your dashboard opens automatically based on your account role.",
+  theme: "min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 text-dark",
+  panel: "bg-white/85 backdrop-blur-xl border-blue-100",
+  accent: "from-blue-600 via-cyan-500 to-blue-700",
+  icon: ShieldCheck,
+  bullets: ["Student Portal", "Admin Operations", "Super Admin Controls"],
+};
+
+async function loginWithId(loginId, password) {
+  const basePayload = { login_id: loginId.trim(), password };
+  const upperLoginId = basePayload.login_id.toUpperCase();
+  const inferredPortal = upperLoginId.startsWith("SUPER") || upperLoginId.includes("SUPERADMIN")
+    ? "super-admin"
+    : upperLoginId.startsWith("ADMIN")
+      ? "admin"
+      : "student";
+  const fallbackPortals = [inferredPortal, ...["student", "admin", "super-admin"].filter((role) => role !== inferredPortal)];
+
+  try {
+    return await apiRequest("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ ...basePayload, portal: inferredPortal }),
+    });
+  } catch (firstError) {
+    let lastError = firstError;
+    try {
+      return await apiRequest("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(basePayload),
+      });
+    } catch (error) {
+      lastError = error;
+    }
+
+    for (const portal of fallbackPortals) {
+      try {
+        return await apiRequest("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ ...basePayload, portal }),
+        });
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  }
+}
+
+export default function Login() {
   const navigate = useNavigate();
   const { setIsAuthenticated, setRole, setCurrentStudentId, setCurrentUser } = useApp();
-  const config = PORTALS[portal];
-  const [loginId, setLoginId] = useState(config?.email || "");
+  const config = DEFAULT_LOGIN_CONFIG;
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-
-  if (!config) {
-    return (
-      <div className="min-h-screen bg-surface bg-grad-mesh p-6 flex items-center justify-center">
-        <div className="w-full max-w-5xl">
-          <div className="text-center mb-8">
-            <div className="mx-auto w-14 h-14 rounded-xl3 bg-grad-primary text-white flex items-center justify-center shadow-floating">
-              <UtensilsCrossed size={26} />
-            </div>
-            <h1 className="font-display text-3xl font-semibold mt-5">Magadh Mahila College Mess Portal</h1>
-            <p className="text-slate-500 mt-2">Separate portals for college administration, mess staff, and hostel students.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {Object.values(PORTALS).map(({ role, path, title, eyebrow, description, icon: Icon, accent }) => (
-              <Link key={role} to={`${path}/login`} className="card-surface rounded-xl3 p-6 shadow-soft hover:shadow-floating transition-all group">
-                <div className={`w-12 h-12 rounded-xl2 bg-gradient-to-br ${accent} text-white flex items-center justify-center`}>
-                  <Icon size={22} />
-                </div>
-                <p className="text-xs font-semibold text-primary mt-5">{eyebrow}</p>
-                <h2 className="font-display text-xl font-semibold mt-1">{title}</h2>
-                <p className="text-sm text-slate-500 mt-2 min-h-[60px]">{description}</p>
-                <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary">
-                  Open portal <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const Icon = config.icon;
 
@@ -99,21 +119,16 @@ export default function Login({ portal }) {
     event.preventDefault();
     setLoading(true);
     try {
-      const session = await apiRequest("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({
-          portal: config.role,
-          login_id: loginId.trim(),
-          password,
-        }),
-      });
+      clearSession();
+      setIsAuthenticated(false);
+      const session = await loginWithId(loginId, password);
       saveSession(session);
       setRole(session.role);
       setCurrentUser(session.user);
       setCurrentStudentId(session.user.student_id || null);
       setIsAuthenticated(true);
       toast.success(`Welcome back, ${session.user.name}!`);
-      navigate(`${config.path}/dashboard`);
+      navigate(`${PORTALS[session.role]?.path || "/student"}/dashboard`);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -145,7 +160,7 @@ export default function Login({ portal }) {
                 transition={{ delay: 0.08 * index }}
                 className="rounded-xl3 p-4 bg-white shadow-soft border border-slate-100"
               >
-                <Sparkles size={17} className={portal === "student" ? "text-sky-500" : "text-primary"} />
+                <Sparkles size={17} className="text-primary" />
                 <p className="text-sm font-semibold mt-3">{item}</p>
               </motion.div>
             ))}
@@ -197,9 +212,9 @@ export default function Login({ portal }) {
             {!loading && <ArrowRight size={16} />}
           </button>
 
-          <Link to="/login" className="block text-center text-xs mt-5 text-slate-500">
-            Switch portal
-          </Link>
+          <p className="text-center text-xs mt-5 text-slate-500">
+            One login page for Admin, Super Admin, and Students
+          </p>
         </motion.form>
       </div>
     </div>
