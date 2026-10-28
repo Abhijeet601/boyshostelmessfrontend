@@ -1,15 +1,203 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Check, CheckCheck, X } from "lucide-react";
 import toast from "react-hot-toast";
-import { Check, X } from "lucide-react";
 import { apiRequest } from "../lib/api";
-
+import { useData } from "../lib/hooks";
+import {
+  Badge,
+  Button,
+  DataState,
+  Empty,
+  Field,
+  Heading,
+  Modal,
+  Panel,
+} from "../components/ui";
 export default function ProfileApprovals() {
-  const [requests, setRequests] = useState([]);
-  const load = () => apiRequest("/admin/profile-change-requests").then((r) => setRequests(r.requests)).catch((e) => toast.error(e.message));
-  useEffect(() => { load(); }, []);
-  const decide = async (id, decision) => { try { await apiRequest(`/admin/profile-change-requests/${id}/decision`, { method: "POST", body: JSON.stringify({ decision }) }); toast.success(`Request ${decision.toLowerCase()}`); load(); } catch (e) { toast.error(e.message); } };
-  return <div className="space-y-6"><div><h1 className="font-display text-2xl font-semibold text-dark">Profile Change Requests</h1><p className="text-sm text-slate-400">Review the current value beside each requested update.</p></div>
-    <div className="space-y-4">{requests.map((r) => <div key={r.id} className="rounded-xl3 border border-slate-100 bg-white p-5 shadow-soft"><div className="flex flex-wrap justify-between gap-2"><div><h2 className="font-semibold text-dark">{r.name}</h2><p className="text-xs text-slate-400">{r.registration_number}</p></div><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{r.status}</span></div>
-      <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-slate-400"><th className="py-2">Field</th><th>Old value</th><th>Requested value</th></tr></thead><tbody>{Object.entries(r.changes).map(([field,value]) => <tr key={field} className="border-t border-slate-50"><td className="py-2 font-medium">{field.replaceAll("_", " ")}</td><td>{r[field] || "—"}</td><td className="text-primary">{value || "—"}</td></tr>)}</tbody></table></div>
-      {r.status === "Pending Approval" && <div className="mt-4 flex gap-2"><button onClick={() => decide(r.id,"Approved")} className="flex items-center gap-1 rounded-xl2 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700"><Check size={15}/>Approve</button><button onClick={() => decide(r.id,"Rejected")} className="flex items-center gap-1 rounded-xl2 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600"><X size={15}/>Reject</button></div>}</div>)}{!requests.length && <div className="rounded-xl3 bg-white p-8 text-center text-sm text-slate-400">No profile change requests.</div>}</div></div>;
+  const resource = useData("/admin/profile-change-requests");
+  const [filter, setFilter] = useState("Pending Approval");
+  const [decision, setDecision] = useState(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const open = (item, result) => {
+    setDecision({ item, result });
+    setReason("");
+    setError("");
+  };
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await apiRequest(
+        `/admin/profile-change-requests/${decision.item.id}/decision`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            decision: decision.result,
+            admin_note: reason || null,
+          }),
+        },
+      );
+      toast.success(`Request ${decision.result.toLowerCase()}`);
+      setDecision(null);
+      resource.reload();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const items =
+    resource.data?.requests.filter((r) => !filter || r.status === filter) || [];
+  return (
+    <div className="page-stack">
+      <Heading
+        eyebrow="Keep student details accurate"
+        title="Profile requests"
+        description="Review requested changes before they become part of a student’s record."
+      />
+      <div className="tabs">
+        {["Pending Approval", "Approved", "Rejected", ""].map((f) => (
+          <button
+            key={f}
+            className={filter === f ? "active" : ""}
+            onClick={() => setFilter(f)}
+          >
+            {f || "All requests"}
+          </button>
+        ))}
+      </div>
+      <DataState resource={resource}>
+        {items.length ? (
+          items.map((r) => (
+            <Panel
+              key={r.id}
+              title={r.name}
+              description={`${r.registration_number} · ${r.hostel} · ${new Date(r.created_at + "Z").toLocaleDateString("en-IN")}`}
+              action={
+                <Badge
+                  tone={
+                    r.status === "Approved"
+                      ? "success"
+                      : r.status === "Rejected"
+                        ? "error"
+                        : "warning"
+                  }
+                >
+                  {r.status}
+                </Badge>
+              }
+            >
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Current / original value</th>
+                      <th>Requested value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(r.changes).map(([key, value]) => (
+                      <tr key={key}>
+                        <td style={{ textTransform: "capitalize" }}>
+                          {key.replaceAll("_", " ")}
+                        </td>
+                        <td>{r.original[key] ?? "—"}</td>
+                        <td className="text-accent">{value || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {r.admin_note && (
+                <p className="muted small" style={{ marginTop: 15 }}>
+                  Review note: {r.admin_note}
+                </p>
+              )}
+              {r.status === "Pending Approval" && (
+                <div className="actions" style={{ marginTop: 20 }}>
+                  <Button onClick={() => open(r, "Approved")}>
+                    <Check size={14} />
+                    Approve changes
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => open(r, "Rejected")}
+                  >
+                    <X size={14} />
+                    Reject
+                  </Button>
+                </div>
+              )}
+            </Panel>
+          ))
+        ) : (
+          <Panel>
+            <Empty
+              icon={CheckCheck}
+              title="No requests to review"
+              description="Student profile updates will appear here."
+            />
+          </Panel>
+        )}
+      </DataState>
+      <Modal
+        open={!!decision}
+        onClose={() => setDecision(null)}
+        title={
+          decision?.result === "Approved"
+            ? "Approve these changes?"
+            : "Reject profile request"
+        }
+      >
+        {decision && (
+          <form onSubmit={submit}>
+            {error && (
+              <div className="auth-error" role="alert">
+                {error}
+              </div>
+            )}
+            <p className="muted small" style={{ marginBottom: 20 }}>
+              Reviewing {decision.item.name}’s profile update.
+            </p>
+            <Field
+              label={
+                decision.result === "Rejected"
+                  ? "Rejection reason"
+                  : "Review note (optional)"
+              }
+            >
+              <textarea
+                rows={3}
+                required={decision.result === "Rejected"}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                maxLength={1000}
+              />
+            </Field>
+            <div className="form-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDecision(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                loading={busy}
+                variant={
+                  decision.result === "Rejected" ? "destructive" : "primary"
+                }
+              >
+                Confirm{" "}
+                {decision.result === "Rejected" ? "rejection" : "approval"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+    </div>
+  );
 }

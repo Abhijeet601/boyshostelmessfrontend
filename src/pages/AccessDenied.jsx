@@ -1,26 +1,26 @@
 import { Link } from "react-router-dom";
 import { LockKeyhole } from "lucide-react";
 import { useApp } from "../context/AppContext";
-
-const roleBase = {
-  "super-admin": "/super-admin",
-  admin: "/admin",
-  student: "/student",
-};
-
 export default function AccessDenied() {
-  const { role } = useApp();
+  const { basePath } = useApp();
   return (
-    <div className="min-h-[70vh] flex items-center justify-center p-6">
-      <div className="max-w-md text-center card-surface rounded-xl3 p-8 shadow-soft">
-        <div className="mx-auto w-14 h-14 rounded-xl3 bg-red-50 text-danger flex items-center justify-center">
-          <LockKeyhole size={26} />
-        </div>
-        <p className="font-display text-5xl font-semibold text-dark mt-6">403</p>
-        <h1 className="font-display text-2xl font-semibold text-dark mt-2">Access Denied</h1>
-        <p className="text-sm text-slate-500 mt-3">You don't have permission to access this page.</p>
-        <Link to={`${roleBase[role] || "/admin"}/dashboard`} className="inline-flex mt-6 rounded-xl2 bg-primary text-white px-5 py-3 text-sm font-semibold">
-          Back to Dashboard
+    <div className="status-page">
+      <div>
+        <span
+          className="icon-tile tone-warning"
+          style={{ width: 64, height: 64 }}
+        >
+          <LockKeyhole size={28} />
+        </span>
+        <p className="eyebrow" style={{ marginTop: 24 }}>
+          403 · Restricted access
+        </p>
+        <h1>This page needs a different permission</h1>
+        <p className="muted small">
+          Contact your Super Admin if you need access to this workspace.
+        </p>
+        <Link className="btn btn-primary" to={`${basePath}/dashboard`}>
+          Back to dashboard
         </Link>
       </div>
     </div>

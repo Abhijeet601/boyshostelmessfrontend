@@ -1,36 +1,157 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 import { RefreshCw, ShieldCheck } from "lucide-react";
 import { apiRequest } from "../lib/api";
+import { useClock } from "../lib/hooks";
 import { useApp } from "../context/AppContext";
+import { Badge, Button } from "./ui";
 
 export default function DynamicStudentQR({ student }) {
-  const { clock } = useApp();
+  const { config } = useApp();
+  const now = useClock();
   const [qr, setQr] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [skew, setSkew] = useState(0);
+  const timer = useRef(null);
+  const mounted = useRef(false);
+  const running = useRef(false);
+  const controller = useRef(null);
+  const requestVersion = useRef(0);
+  const refreshRef = useRef(null);
   const refresh = useCallback(async () => {
-    try { setQr(await apiRequest("/student/qr", { method: "POST" })); setError(""); }
-    catch (e) { setError(e.message); }
+    if (running.current) return;
+    running.current = true;
+    const version = ++requestVersion.current;
+    setLoading(true);
+    setQr(null);
+    clearTimeout(timer.current);
+    controller.current = new AbortController();
+    try {
+      const result = await apiRequest("/student/qr", {
+        method: "POST",
+        signal: controller.current.signal,
+      });
+      if (mounted.current && version === requestVersion.current) {
+        setQr(result);
+        setSkew(new Date(result.server_time).getTime() - Date.now());
+        setError("");
+        timer.current = setTimeout(
+          () => refreshRef.current?.(),
+          result.refresh_seconds * 1000,
+        );
+      }
+    } catch (e) {
+      if (
+        mounted.current &&
+        version === requestVersion.current &&
+        e.name !== "AbortError"
+      ) {
+        setError(e.message);
+        timer.current = setTimeout(() => refreshRef.current?.(), 10000);
+      }
+    } finally {
+      if (version === requestVersion.current) {
+        running.current = false;
+        if (mounted.current) setLoading(false);
+      }
+    }
   }, []);
-  useEffect(() => { refresh(); const timer = setInterval(refresh, 25000); return () => clearInterval(timer); }, [refresh]);
-  const remaining = qr ? Math.max(0, Math.ceil((new Date(qr.expires_at).getTime() - clock.getTime()) / 1000)) : 0;
-
+  refreshRef.current = refresh;
+  useEffect(() => {
+    mounted.current = true;
+    refresh();
+    return () => {
+      mounted.current = false;
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- invalidate pending requests during cleanup; this is not a DOM ref
+      requestVersion.current++;
+      running.current = false;
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- mutable timer is owned by this QR lifecycle
+      clearTimeout(timer.current);
+      controller.current?.abort();
+    };
+  }, [refresh]);
+  const remaining = qr
+    ? Math.min(
+        qr.ttl_seconds,
+        Math.max(
+          0,
+          Math.ceil(
+            (new Date(qr.expires_at).getTime() - now.getTime() - skew) / 1000,
+          ),
+        ),
+      )
+    : 0;
+  const currentMeal = qr?.session;
   return (
-    <section className="rounded-xl3 border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-5 shadow-floating">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-5">
-        <div className="max-w-md">
-          <div className="flex items-center gap-2 text-sky-700"><ShieldCheck size={18} /><h2 className="font-display font-semibold">Your live Mess QR</h2></div>
-          <p className="mt-2 text-sm text-slate-500">Present this code at the scanner. It rotates every 25 seconds and can only be accepted once.</p>
-          <p className="mt-3 text-xs text-slate-400">Capture deterrence is enabled, but screenshots cannot be fully prevented in a web browser. Shared or captured codes expire quickly.</p>
+    <section className="qr-pass">
+      <div className="qr-pass-header">
+        <div>
+          <p className="eyebrow" style={{ marginBottom: 5 }}>
+            Your digital attendance pass
+          </p>
+          <h2>One scan. You’re checked in.</h2>
         </div>
-        <div className="relative select-none overflow-hidden rounded-xl3 border border-sky-100 bg-white p-4" onContextMenu={(e) => e.preventDefault()}>
-          {qr ? <QRCode value={qr.token} size={150} fgColor="#0f172a" /> : <div className="h-[150px] w-[150px] animate-pulse rounded-xl bg-slate-100" />}
-          <div className="pointer-events-none absolute inset-x-0 top-1/2 -rotate-12 bg-sky-600/10 py-1 text-center text-[10px] font-bold text-sky-900 animate-pulse">
-            {student?.name} · {student?.registration_number || student?.regNumber} · {clock.toLocaleTimeString("en-IN")}
+        <Badge tone={remaining > 0 ? "success" : "neutral"}>
+          {remaining > 0 ? "Live QR" : "Refreshing"}
+        </Badge>
+      </div>
+      <div className="qr-pass-body">
+        <div className="qr-info">
+          <span className="icon-tile tone-indigo">
+            <ShieldCheck size={19} />
+          </span>
+          <h3>{student?.name}</h3>
+          <p className="muted">
+            {student?.hostel} · Room {student?.room_number}
+          </p>
+          <p className="muted mono" style={{ marginTop: 6 }}>
+            {student?.registration_number}
+          </p>
+          <div className="actions">
+            <Badge tone={currentMeal ? "indigo" : "neutral"}>
+              {currentMeal?.meal || "Between meal sessions"}
+            </Badge>
           </div>
-          <div className="mt-2 flex items-center justify-between text-xs"><span className={remaining < 8 ? "text-red-500" : "text-slate-500"}>{remaining}s remaining</span><button onClick={refresh} className="text-sky-600" aria-label="Refresh QR"><RefreshCw size={14} /></button></div>
-          {error && <p className="mt-2 max-w-[150px] text-xs text-red-500">{error}</p>}
+          <div className="actions">
+            <span
+              className={`qr-countdown ${remaining < 8 ? "text-error" : ""}`}
+            >
+              {remaining}s remaining
+            </span>
+            <Button variant="ghost" loading={loading} onClick={refresh}>
+              <RefreshCw size={14} />
+              Refresh
+            </Button>
+          </div>
+          {error && (
+            <p
+              className="text-error small"
+              role="alert"
+              style={{ marginTop: 12 }}
+            >
+              {error}
+            </p>
+          )}
         </div>
+        <div className="qr-frame" onContextMenu={(e) => e.preventDefault()}>
+          {qr && remaining > 0 ? (
+            <QRCode value={qr.token} size={190} fgColor="#1e1b4b" />
+          ) : (
+            <div className="skeleton" style={{ width: 190, height: 190 }} />
+          )}
+          <div className="qr-watermark">
+            {student?.name} ·{" "}
+            {now.toLocaleTimeString("en-IN", { timeZone: config.timezone })}
+          </div>
+        </div>
+      </div>
+      <div className="qr-pass-footer">
+        <ShieldCheck size={14} />
+        <span>
+          Short-lived, single-use and verified securely. Present your current
+          live code at the scanner.
+        </span>
       </div>
     </section>
   );

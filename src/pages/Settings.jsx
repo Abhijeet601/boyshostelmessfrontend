@@ -1,153 +1,548 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
-  Building2, UtensilsCrossed, Clock, QrCode, ScanLine, ShieldCheck, Palette,
-  User, DatabaseBackup, RotateCcw, Save,
+  ArrowUpRight,
+  Building2,
+  CalendarClock,
+  Clock3,
+  DatabaseBackup,
+  Download,
+  Image,
+  Palette,
+  QrCode,
+  RefreshCw,
+  Save,
+  ScanLine,
+  Settings2,
+  ShieldCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
-
-const SECTIONS = [
-  { id: "university", label: "College Details", icon: Building2 },
-  { id: "mess", label: "Mess Details", icon: UtensilsCrossed },
-  { id: "timing", label: "Meal Timing", icon: Clock },
-  { id: "qr", label: "QR Settings", icon: QrCode },
-  { id: "scanner", label: "Scanner Settings", icon: ScanLine },
-  { id: "security", label: "Security", icon: ShieldCheck },
-  { id: "theme", label: "Theme", icon: Palette },
-  { id: "profile", label: "Profile", icon: User },
-  { id: "backup", label: "Backup & Restore", icon: DatabaseBackup },
+import { useApp } from "../context/AppContext";
+import { apiRequest, download } from "../lib/api";
+import { useData } from "../lib/hooks";
+import {
+  Badge,
+  Button,
+  CheckLabel,
+  DataState,
+  Empty,
+  Field,
+  Heading,
+  Modal,
+  Panel,
+} from "../components/ui";
+const sections = [
+  ["general", "General settings", Settings2],
+  ["branding", "Institution branding", Image],
+  ["hostels", "Hostel settings", Building2],
+  ["timing", "Meal timing", Clock3],
+  ["sessions", "Attendance sessions", CalendarClock],
+  ["qr", "QR settings", QrCode],
+  ["scanner", "Scanner settings", ScanLine],
+  ["security", "Security", ShieldCheck],
+  ["appearance", "Appearance", Palette],
+  ["backup", "Backup & restore", DatabaseBackup],
 ];
-
-function Field({ label, defaultValue, type = "text" }) {
-  return (
-    <div>
-      <label className="text-xs font-semibold text-slate-500 mb-1.5 block">{label}</label>
-      <input type={type} defaultValue={defaultValue} className="w-full bg-slate-50 rounded-xl2 px-4 py-2.5 text-sm outline-none border border-transparent focus:border-primary-100" />
-    </div>
-  );
-}
-
-function Toggle({ label, defaultOn = true }) {
-  const [on, setOn] = useState(defaultOn);
-  return (
-    <div className="flex items-center justify-between py-2">
-      <span className="text-sm text-slate-600">{label}</span>
-      <button onClick={() => setOn((v) => !v)} className={`w-11 h-6 rounded-full transition-colors relative ${on ? "bg-success" : "bg-slate-200"}`}>
-        <motion.span animate={{ x: on ? 20 : 2 }} className="absolute top-1 w-4 h-4 bg-white rounded-full shadow" />
-      </button>
-    </div>
-  );
-}
-
 export default function Settings() {
-  const [active, setActive] = useState("university");
-
-  const save = () => toast.success("Settings saved successfully");
-
-  const CONTENT = {
-    university: (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="College Name" defaultValue="Magadh Mahila College" />
-        <Field label="Campus Code" defaultValue="MMC-PATNA-01" />
-        <Field label="Contact Email" defaultValue="hostel.office@magadhmahilacollege.org" />
-        <Field label="Contact Number" defaultValue="+91 612 222 5555" />
-      </div>
-    ),
-    mess: (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Mess Name" defaultValue="MMC Hostel Mess" />
-        <Field label="Mess Capacity" defaultValue="240" />
-        <Field label="Contractor" defaultValue="Patna Campus Catering Services" />
-        <Field label="Menu Cycle" defaultValue="Weekly" />
-      </div>
-    ),
-    timing: (
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Field label="Breakfast Window" defaultValue="7:30 AM - 9:30 AM" />
-        <Field label="Lunch Window" defaultValue="12:30 PM - 2:30 PM" />
-        <Field label="Dinner Window" defaultValue="7:30 PM - 9:30 PM" />
-      </div>
-    ),
-    qr: (
-      <div className="space-y-1">
-        <Toggle label="Auto-regenerate expired QR codes" />
-        <Toggle label="Allow students to download their own QR" />
-        <Toggle label="Watermark QR with hostel logo" defaultOn={false} />
-        <div className="mt-3"><Field label="QR Validity (days)" defaultValue="365" /></div>
-      </div>
-    ),
-    scanner: (
-      <div className="space-y-1">
-        <Toggle label="Enable duplicate scan detection" />
-        <Toggle label="Play sound on successful scan" />
-        <Toggle label="Auto-lock scanner after meal window" />
-        <div className="mt-3"><Field label="Scan cooldown (seconds)" defaultValue="5" /></div>
-      </div>
-    ),
-    security: (
-      <div className="space-y-1">
-        <Toggle label="Require 2-factor authentication for admins" />
-        <Toggle label="Log all administrative actions" />
-        <Toggle label="Session auto-timeout after 30 min" />
-      </div>
-    ),
-    theme: (
-      <div className="flex gap-3">
-        {["#2563EB", "#22C55E", "#7C3AED", "#0F172A", "#F59E0B"].map((c) => (
-          <button key={c} className="w-10 h-10 rounded-full ring-2 ring-offset-2 ring-transparent hover:ring-slate-200" style={{ background: c }} onClick={save} />
-        ))}
-      </div>
-    ),
-    profile: (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Full Name" defaultValue="Admin Priya" />
-        <Field label="Email" defaultValue="mess.admin@magadhmahilacollege.org" />
-        <Field label="New Password" type="password" defaultValue="" />
-        <Field label="Confirm Password" type="password" defaultValue="" />
-      </div>
-    ),
-    backup: (
-      <div className="flex gap-3">
-        <button onClick={() => toast.success("Backup created successfully")} className="flex items-center gap-2 bg-primary-50 text-primary text-sm font-semibold px-4 py-2.5 rounded-xl2">
-          <DatabaseBackup size={15} /> Create Backup
-        </button>
-        <button onClick={() => toast.success("System restored from last backup")} className="flex items-center gap-2 bg-slate-100 text-slate-600 text-sm font-semibold px-4 py-2.5 rounded-xl2">
-          <RotateCcw size={15} /> Restore
-        </button>
-      </div>
-    ),
+  const { basePath, setConfig } = useApp();
+  const [params] = useSearchParams();
+  const [active, setActive] = useState(params.get("section") || "general");
+  const resource = useData("/settings");
+  const backups = useData("/backups");
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [restore, setRestore] = useState(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  useEffect(() => {
+    if (resource.data) setForm(resource.data);
+  }, [resource.data]);
+  const set = (key, value) => setForm((old) => ({ ...old, [key]: value }));
+  const save = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await apiRequest("/settings", {
+        method: "PUT",
+        body: JSON.stringify(form),
+      });
+      setConfig(updated);
+      setForm(updated);
+      toast.success("Settings saved");
+      resource.reload();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
   };
-
+  const backup = async () => {
+    setBackupBusy(true);
+    try {
+      await apiRequest("/backups", { method: "POST" });
+      backups.reload();
+      toast.success("Backup created");
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+  const merge = async () => {
+    setBackupBusy(true);
+    try {
+      const result = await apiRequest(`/backups/${restore}/restore`, {
+        method: "POST",
+      });
+      toast.success(`${result.inserted} missing records restored`);
+      setRestore(null);
+      backups.reload();
+      resource.reload();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+  const field = (key, label, type = "text", help) => (
+    <Field
+      key={key}
+      label={label}
+      type={type}
+      value={form?.[key] ?? ""}
+      help={help}
+      onChange={(e) =>
+        set(key, type === "number" ? Number(e.target.value) : e.target.value)
+      }
+    />
+  );
+  const canSave = [
+    "general",
+    "branding",
+    "timing",
+    "qr",
+    "scanner",
+    "appearance",
+  ].includes(active);
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-dark">Settings</h1>
-        <p className="text-slate-400 text-sm mt-1">Configure your mess system preferences</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="card-surface rounded-xl3 p-3 shadow-soft h-fit space-y-1">
-          {SECTIONS.map(({ id, label, icon: Icon }) => (
+    <div className="page-stack">
+      <Heading
+        eyebrow="Make the workspace yours"
+        title="System settings"
+        description="Configure your institution, attendance policies, and operating preferences."
+      />
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="Settings sections">
+          {sections.map(([key, label, Icon]) => (
             <button
-              key={id}
-              onClick={() => setActive(id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl2 text-sm font-medium transition-colors ${
-                active === id ? "bg-primary-50 text-primary" : "text-slate-500 hover:bg-slate-50"
-              }`}
+              key={key}
+              className={active === key ? "active" : ""}
+              onClick={() => {
+                setActive(key);
+                setError("");
+              }}
             >
-              <Icon size={16} /> {label}
+              <Icon size={15} />
+              {label}
             </button>
           ))}
-        </div>
-
-        <motion.div key={active} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="md:col-span-3 card-surface rounded-xl3 p-6 shadow-soft">
-          <h3 className="font-display font-semibold text-dark mb-5">{SECTIONS.find((s) => s.id === active)?.label}</h3>
-          {CONTENT[active]}
-          <button onClick={save} className="mt-6 flex items-center gap-2 bg-primary text-white text-sm font-semibold px-5 py-2.5 rounded-xl2 shadow-floating">
-            <Save size={15} /> Save Changes
-          </button>
-        </motion.div>
+        </nav>
+        <DataState resource={resource}>
+          {form && (
+            <Panel
+              title={sections.find((s) => s[0] === active)?.[1]}
+              description="Changes are validated and saved on the server."
+            >
+              <form onSubmit={save}>
+                {error && (
+                  <div className="auth-error" role="alert">
+                    {error}
+                  </div>
+                )}
+                {active === "general" && (
+                  <div className="form-grid">
+                    {field("app_name", "Application name")}
+                    {field(
+                      "academic_session",
+                      "Academic session",
+                      "text",
+                      "For example, 2026–27",
+                    )}
+                    {field(
+                      "timezone",
+                      "Timezone",
+                      "text",
+                      "Use an IANA timezone, such as Asia/Kolkata.",
+                    )}
+                    {field("contact_email", "Contact email", "email")}
+                    {field("contact_phone", "Contact phone")}
+                  </div>
+                )}
+                {active === "branding" && (
+                  <>
+                    <div className="form-grid">
+                      {field(
+                        "institution_name",
+                        "Institution name",
+                        "text",
+                        "Leave blank to use neutral application branding.",
+                      )}
+                      {field(
+                        "logo_url",
+                        "Institution logo URL",
+                        "url",
+                        "Public HTTP(S) image URL.",
+                      )}
+                    </div>
+                    {form.logo_url && (
+                      <div style={{ marginTop: 25 }}>
+                        <p className="muted small" style={{ marginBottom: 10 }}>
+                          Logo preview
+                        </p>
+                        <img
+                          alt="Institution logo preview"
+                          src={form.logo_url}
+                          style={{
+                            maxHeight: 80,
+                            maxWidth: 200,
+                            objectFit: "contain",
+                          }}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+                {active === "hostels" && (
+                  <>
+                    <p className="muted small">
+                      Manage hostel names, contact information, account status,
+                      and administrator assignments in the hostel workspace.
+                    </p>
+                    <div className="actions" style={{ marginTop: 22 }}>
+                      <Link
+                        className="btn btn-primary"
+                        to={`${basePath}/hostels`}
+                      >
+                        Manage hostels
+                        <ArrowUpRight size={14} />
+                      </Link>
+                      <Link
+                        className="btn btn-outline"
+                        to={`${basePath}/admins`}
+                      >
+                        Assign administrators
+                      </Link>
+                    </div>
+                  </>
+                )}
+                {active === "timing" && (
+                  <>
+                    <div className="notice" style={{ marginBottom: 25 }}>
+                      <Clock3 size={17} />
+                      Recurring timings apply to automatically generated
+                      sessions. Date-specific and hostel-specific overrides
+                      remain in effect. An end time before the start time
+                      creates an overnight session.
+                    </div>
+                    <div className="page-stack">
+                      {form.schedules.map((item, index) => (
+                        <div
+                          key={item.meal}
+                          className="panel"
+                          style={{ padding: 17 }}
+                        >
+                          <div
+                            className="panel-heading"
+                            style={{ marginBottom: 15 }}
+                          >
+                            <h3>{item.meal}</h3>
+                            <CheckLabel
+                              label="Attendance enabled"
+                              checked={item.enabled}
+                              onChange={(value) =>
+                                set(
+                                  "schedules",
+                                  form.schedules.map((s, i) =>
+                                    i === index ? { ...s, enabled: value } : s,
+                                  ),
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="form-grid">
+                            <Field
+                              label="Starts"
+                              type="time"
+                              required
+                              value={item.start}
+                              onChange={(e) =>
+                                set(
+                                  "schedules",
+                                  form.schedules.map((s, i) =>
+                                    i === index
+                                      ? { ...s, start: e.target.value }
+                                      : s,
+                                  ),
+                                )
+                              }
+                            />
+                            <Field
+                              label="Ends"
+                              type="time"
+                              required
+                              value={item.end}
+                              onChange={(e) =>
+                                set(
+                                  "schedules",
+                                  form.schedules.map((s, i) =>
+                                    i === index
+                                      ? { ...s, end: e.target.value }
+                                      : s,
+                                  ),
+                                )
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {active === "sessions" && (
+                  <>
+                    <p className="muted small">
+                      Configure a particular day or hostel without changing your
+                      recurring meal schedule.
+                    </p>
+                    <Link
+                      className="btn btn-primary"
+                      style={{ marginTop: 22 }}
+                      to={`${basePath}/sessions`}
+                    >
+                      Manage attendance sessions
+                      <ArrowUpRight size={14} />
+                    </Link>
+                  </>
+                )}
+                {active === "qr" && (
+                  <>
+                    <div className="notice" style={{ marginBottom: 25 }}>
+                      <ShieldCheck size={17} />
+                      Live QR codes are opaque, single-use, and bound to student
+                      accounts. Static QR downloads are unavailable.
+                    </div>
+                    <div className="form-grid">
+                      {field(
+                        "qr_ttl_seconds",
+                        "Token expiry (seconds)",
+                        "number",
+                        "Allowed range: 15–120 seconds.",
+                      )}
+                      {field(
+                        "qr_refresh_seconds",
+                        "Refresh interval (seconds)",
+                        "number",
+                        "Must be shorter than the expiry period.",
+                      )}
+                    </div>
+                    <Link
+                      className="panel-link"
+                      style={{ marginTop: 22 }}
+                      to={`${basePath}/qr-management`}
+                    >
+                      View QR security
+                      <ArrowUpRight size={14} />
+                    </Link>
+                  </>
+                )}
+                {active === "scanner" && (
+                  <>
+                    <CheckLabel
+                      label="Play a subtle sound after successful scans"
+                      checked={form.scanner_sound}
+                      onChange={(value) => set("scanner_sound", value)}
+                    />
+                    <p className="muted small">
+                      Operators can also mute their station. Both camera and
+                      keyboard scanners use the same secure validation.
+                    </p>
+                    <div className="actions" style={{ marginTop: 22 }}>
+                      <Link
+                        className="btn btn-outline"
+                        to={`${basePath}/scanner-management`}
+                      >
+                        Scanner health
+                      </Link>
+                      <Link
+                        className="btn btn-outline"
+                        to={`${basePath}/admins`}
+                      >
+                        Operator permissions
+                      </Link>
+                    </div>
+                  </>
+                )}
+                {active === "security" && (
+                  <>
+                    <CheckLabel label="Allow rejected applicants to correct and resubmit their application" checked={form.registration_resubmission} onChange={value=>set('registration_resubmission',value)} />
+                    <div className="notice">
+                      <ShieldCheck size={18} />
+                      Authentication, role permissions, active accounts, and
+                      hostel scope are enforced by the backend. Password changes
+                      revoke existing sessions.
+                    </div>
+                    <dl className="detail-grid">
+                      <div>
+                        <dt>QR tokens</dt>
+                        <dd>Hashed at rest · short-lived</dd>
+                      </div>
+                      <div>
+                        <dt>Attendance</dt>
+                        <dd>Atomic validation · unique records</dd>
+                      </div>
+                      <div>
+                        <dt>Passwords</dt>
+                        <dd>PBKDF2 salted hashes</dd>
+                      </div>
+                      <div>
+                        <dt>Abuse protection</dt>
+                        <dd>Database-backed rate limits</dd>
+                      </div>
+                    </dl>
+                    <Link
+                      className="btn btn-outline"
+                      to={`${basePath}/profile`}
+                    >
+                      Manage your password
+                    </Link>
+                  </>
+                )}
+                {active === "appearance" && (
+                  <>
+                    <p className="muted small" style={{ marginBottom: 20 }}>
+                      Choose a workspace accent. The light appearance keeps
+                      tables, passes, and scanner controls consistent.
+                    </p>
+                    <Field label="Accent">
+                      <select
+                        value={form.accent || "indigo"}
+                        onChange={(e) => set("accent", e.target.value)}
+                      >
+                        <option value="indigo">Indigo</option>
+                        <option value="violet">Violet</option>
+                        <option value="blue">Blue</option>
+                      </select>
+                    </Field>
+                    <div className="actions" style={{ marginTop: 22 }}>
+                      <Badge tone="indigo">Selected accent</Badge>
+                      <Badge tone="success">Light theme</Badge>
+                    </div>
+                    <p className="muted small" style={{ marginTop: 20 }}>
+                      Motion follows the reduced-motion preference set on your
+                      device.
+                    </p>
+                  </>
+                )}
+                {active === "backup" && (
+                  <>
+                    <div
+                      className="notice notice-warning"
+                      style={{ marginBottom: 23 }}
+                    >
+                      <DatabaseBackup size={18} />
+                      Backups contain private institutional records and password
+                      hashes. Keep downloads secure. Restore merges missing rows
+                      and preserves existing records.
+                    </div>
+                    <Button type="button" loading={backupBusy} onClick={backup}>
+                      <DatabaseBackup size={15} />
+                      Create backup
+                    </Button>
+                    <div style={{ marginTop: 24 }}>
+                      <DataState resource={backups}>
+                        {backups.data?.items.length ? (
+                          backups.data.items.map((b) => (
+                            <div className="activity-item" key={b.name}>
+                              <div
+                                style={{
+                                  minWidth: 0,
+                                  overflowWrap: "anywhere",
+                                }}
+                              >
+                                <strong>{b.name}</strong>
+                                <small>{(b.size / 1024).toFixed(1)} KB</small>
+                              </div>
+                              <div
+                                className="actions"
+                                style={{ marginLeft: "auto", flexShrink: 0 }}
+                              >
+                                <button
+                                  className="icon-button"
+                                  type="button"
+                                  aria-label={`Download ${b.name}`}
+                                  onClick={() =>
+                                    download(
+                                      `/backups/${b.name}`,
+                                      b.name,
+                                    ).catch((e) => toast.error(e.message))
+                                  }
+                                >
+                                  <Download size={16} />
+                                </button>
+                                <button
+                                  className="icon-button"
+                                  type="button"
+                                  aria-label={`Restore missing rows from ${b.name}`}
+                                  onClick={() => setRestore(b.name)}
+                                >
+                                  <RefreshCw size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <Empty
+                            title="No backups yet"
+                            description="Create a backup to preserve the current workspace."
+                          />
+                        )}
+                      </DataState>
+                    </div>
+                  </>
+                )}
+                {canSave && (
+                  <div className="form-actions">
+                    <Button loading={saving}>
+                      <Save size={14} />
+                      Save changes
+                    </Button>
+                  </div>
+                )}
+              </form>
+            </Panel>
+          )}
+        </DataState>
       </div>
+      <Modal
+        open={!!restore}
+        onClose={() => setRestore(null)}
+        title="Restore missing records?"
+      >
+        <p className="muted small">
+          A fresh backup will be created first. Missing records from this backup
+          will be added where their identifiers do not conflict. Existing
+          records and settings will remain intact.
+        </p>
+        <div className="form-actions">
+          <Button variant="outline" onClick={() => setRestore(null)}>
+            Cancel
+          </Button>
+          <Button loading={backupBusy} onClick={merge}>
+            Restore missing records
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

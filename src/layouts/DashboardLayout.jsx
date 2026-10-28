@@ -1,35 +1,43 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import { useApp } from "../context/AppContext";
-
+import { ShieldCheck } from "lucide-react";
 export default function DashboardLayout() {
   const location = useLocation();
-  const { role } = useApp();
-  const bgClass = role === "super-admin"
-    ? "bg-gradient-to-br from-blue-50 via-white to-cyan-50"
-    : role === "student"
-      ? "bg-gradient-to-br from-sky-50 via-white to-cyan-50"
-      : "bg-surface bg-grad-mesh";
-
+  const { role, currentUser } = useApp();
   return (
-    <div className={`flex min-h-screen ${bgClass}`}>
+    <div className="app-shell">
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
       <Sidebar />
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="workspace">
         <Navbar />
-        <main className="flex-1 p-4 md:p-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.25 }}
+        <main id="main" className="main-content">
+          {role === "admin" && !currentUser?.hostel_scope && (
+            <div
+              className="notice notice-warning"
+              role="status"
+              style={{ marginBottom: 22 }}
             >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+              <ShieldCheck size={18} />
+              <span>
+                Your account needs a hostel assignment. A Super Admin can assign
+                your hostel in Admin Management to enable student and attendance
+                access.
+              </span>
+            </div>
+          )}
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Outlet />
+          </motion.div>
         </main>
       </div>
     </div>
