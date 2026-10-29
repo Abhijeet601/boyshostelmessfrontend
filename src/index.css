@@ -1672,6 +1672,33 @@ td small {
 .scanner-main {
   min-width: 0;
 }
+.scanner-feedback-anchor {
+  scroll-margin-top: 90px;
+}
+.scanner-activity {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.scanner-activity .activity-item {
+  gap: 10px;
+}
+.scanner-activity-person {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.scanner-activity .avatar,
+.scanner-activity .badge {
+  flex-shrink: 0;
+}
+.scanner-stat .text-warning {
+  color: #b45309;
+}
+.scanner-main .tabs button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .scanner-preview {
   min-height: 360px;
   position: relative;

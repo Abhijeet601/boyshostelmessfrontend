@@ -1,0 +1,248 @@
+.scan-feedback {
+  --feedback-color: #b45309;
+  --feedback-ink: #78350f;
+  --feedback-tint: #fff7e8;
+  --feedback-border: #f7c66d;
+  --feedback-glow: #f59e0b21;
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  margin-bottom: 22px;
+  padding: 26px 26px 21px;
+  border: 1.5px solid var(--feedback-border);
+  border-radius: 22px;
+  background: radial-gradient(ellipse at 100% 0, var(--feedback-tint), transparent 65%), #fff;
+  color: #0f172a;
+  box-shadow: 0 12px 38px var(--feedback-glow), 0 0 0 4px var(--feedback-glow);
+}
+.scan-feedback-duplicate {
+  animation: scan-feedback-glow 2s ease-in-out infinite;
+}
+.scan-feedback:focus-visible {
+  outline: 2px solid var(--feedback-border);
+  outline-offset: 4px;
+}
+.scan-feedback-success {
+  --feedback-color: #047857;
+  --feedback-ink: #065f46;
+  --feedback-tint: #ecfdf5;
+  --feedback-border: #86d9b9;
+  --feedback-glow: #10b98118;
+}
+.scan-feedback-invalid {
+  --feedback-color: #b91c1c;
+  --feedback-ink: #991b1b;
+  --feedback-tint: #fff1f2;
+  --feedback-border: #fca5a5;
+  --feedback-glow: #ef44441a;
+}
+.scan-feedback-heading {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.scan-feedback-heading > div:last-child {
+  min-width: 0;
+}
+.scan-feedback-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 80px;
+  height: 80px;
+  border: 1px solid var(--feedback-border);
+  border-radius: 24px;
+  background: var(--feedback-tint);
+  color: var(--feedback-color);
+  box-shadow: 0 5px 16px var(--feedback-glow);
+}
+.scan-feedback-duplicate .scan-feedback-icon::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border: 1px solid var(--feedback-border);
+  border-radius: 29px;
+  animation: scan-feedback-pulse 2s ease-out infinite;
+  pointer-events: none;
+}
+.scan-feedback-eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--feedback-color);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+}
+.scan-feedback-heading h2 {
+  color: var(--feedback-ink);
+  font-size: clamp(19px, 1.85vw, 27px);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.6px;
+  overflow-wrap: anywhere;
+}
+.scan-feedback-heading p {
+  margin-top: 9px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.scan-feedback-student {
+  margin-top: 23px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffffdf;
+}
+.scan-feedback-person {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.scan-feedback-person > div {
+  min-width: 0;
+}
+.scan-feedback-person .avatar {
+  flex-shrink: 0;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px #e2e8f0;
+}
+.scan-feedback-person h3 {
+  margin-bottom: 8px;
+  font-size: 19px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+.scan-feedback-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--feedback-tint);
+  color: var(--feedback-color);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+}
+.scan-feedback-status > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.scan-feedback-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 17px 20px;
+  margin: 20px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid #edf0f5;
+}
+.scan-feedback-details dt {
+  margin-bottom: 5px;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.scan-feedback-details dd {
+  margin: 0;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.scan-feedback-time dd {
+  color: var(--feedback-color);
+  font-variant-numeric: tabular-nums;
+}
+.scan-feedback-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 20px;
+}
+.scan-feedback-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #64748b;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.scan-feedback-countdown svg {
+  flex-shrink: 0;
+}
+.scan-feedback .scan-feedback-dismiss {
+  min-height: 42px;
+  flex-shrink: 0;
+  border-color: transparent;
+  background: var(--feedback-color);
+  color: #fff;
+  box-shadow: 0 4px 12px var(--feedback-glow);
+}
+.scan-feedback .scan-feedback-dismiss:hover {
+  background: var(--feedback-ink);
+}
+.scan-feedback-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: var(--feedback-tint);
+}
+.scan-feedback-progress > div {
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  background: var(--feedback-color);
+  opacity: 0.7;
+}
+.scan-feedback-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@keyframes scan-feedback-glow {
+  50% { box-shadow: 0 12px 38px #f59e0b2b, 0 0 0 5px #f59e0b19; }
+}
+@keyframes scan-feedback-pulse {
+  0% { transform: scale(0.96); opacity: 0.8; }
+  100% { transform: scale(1.18); opacity: 0; }
+}
+@media (max-width: 650px) {
+  .scan-feedback { padding: 20px 17px 19px; border-radius: 18px; }
+  .scan-feedback-heading { align-items: flex-start; gap: 14px; }
+  .scan-feedback-icon { width: 58px; height: 58px; border-radius: 18px; }
+  .scan-feedback-icon > svg { width: 34px; height: 34px; }
+  .scan-feedback-duplicate .scan-feedback-icon::after { border-radius: 23px; }
+  .scan-feedback-heading h2 { font-size: 19px; letter-spacing: -0.4px; }
+  .scan-feedback-heading p { font-size: 12px; }
+  .scan-feedback-eyebrow { font-size: 9px; letter-spacing: 1px; }
+  .scan-feedback-student { padding: 16px; margin-top: 19px; }
+  .scan-feedback-details { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+  .scan-feedback-person h3 { font-size: 17px; }
+  .scan-feedback-footer { flex-wrap: wrap; }
+  .scan-feedback .scan-feedback-dismiss { width: 100%; justify-content: center; }
+}
+@media (max-width: 380px) {
+  .scan-feedback-heading { flex-direction: column; }
+  .scan-feedback-person { align-items: flex-start; gap: 11px; }
+  .scan-feedback-student { padding: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-feedback,
+  .scan-feedback-duplicate .scan-feedback-icon::after { animation: none; }
+}

@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import {
-  AlertCircle,
   Camera,
-  Check,
-  CheckCircle2,
   Clock3,
   Keyboard,
   Radio,
@@ -17,7 +14,8 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { apiRequest } from "../lib/api";
-import { localDate, useClock, useData } from "../lib/hooks";
+import { useClock, useData } from "../lib/hooks";
+import ScanFeedback, { AnimatedScanCount } from "../components/ScanFeedback";
 import {
   Avatar,
   Badge,
@@ -31,7 +29,7 @@ import {
   Panel,
 } from "../components/ui";
 
-function successSound() {
+function scanSound(kind) {
   try {
     const Audio = window.AudioContext || window.webkitAudioContext;
     if (!Audio) return;
@@ -41,8 +39,15 @@ function successSound() {
     oscillator.connect(gain);
     gain.connect(context.destination);
     gain.gain.setValueAtTime(0.08, context.currentTime);
-    oscillator.frequency.setValueAtTime(740, context.currentTime);
-    oscillator.frequency.setValueAtTime(980, context.currentTime + 0.08);
+    const frequencies =
+      kind === "success"
+        ? [740, 980]
+        : kind === "duplicate"
+          ? [440, 330]
+          : [260, 190];
+    oscillator.type = kind === "success" ? "sine" : "triangle";
+    oscillator.frequency.setValueAtTime(frequencies[0], context.currentTime);
+    oscillator.frequency.setValueAtTime(frequencies[1], context.currentTime + 0.1);
     gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.2);
     oscillator.start();
     oscillator.stop(context.currentTime + 0.2);
@@ -52,13 +57,15 @@ function successSound() {
   }
 }
 const errorTitles = {
-  QR_INVALID: "Invalid QR code",
-  QR_EXPIRED: "This QR code has expired",
-  QR_USED: "This QR code has already been used",
+  QR_INVALID: "Invalid QR Code",
+  QR_EXPIRED: "Expired QR Code",
+  QR_USED: "QR Already Used",
+  STUDENT_NOT_APPROVED: "Student Account Not Approved",
+  STUDENT_SUSPENDED: "Student Account Suspended",
   STUDENT_INACTIVE: "Student access is disabled",
-  NO_ACTIVE_SESSION: "No active attendance session",
-  UNAUTHORIZED_SCANNER: "Scanner access is restricted",
-  NETWORK_ERROR: "Connection interrupted",
+  NO_ACTIVE_SESSION: "No Active Meal Session",
+  UNAUTHORIZED_SCANNER: "Scanner Not Authorized",
+  NETWORK_ERROR: "Network Error",
   MEAL_ALREADY_MARKED: "Attendance Already Marked",
   ALREADY_MARKED: "Attendance Already Marked",
 };
@@ -75,14 +82,6 @@ export default function LiveScanner() {
   );
   const accessRef = useRef(scannerAllowed);
   accessRef.current = scannerAllowed;
-  const today = localDate(config.timezone);
-  const recent = useData(
-    scannerAllowed
-      ? `/attendance?from_date=${today}&to_date=${today}&page_size=5`
-      : null,
-    15000,
-  );
-  const reloadRecent = recent.reload;
   const [mode, setMode] = useState("hardware");
   const [cameraId, setCameraId] = useState("");
   const [cameras, setCameras] = useState([]);
@@ -91,14 +90,14 @@ export default function LiveScanner() {
   const [cameraError, setCameraError] = useState("");
   const [value, setValue] = useState("");
   const [state, setState] = useState("Ready");
-  const [result, setResult] = useState(null);
-  const [rejection, setRejection] = useState(null);
+  const [feedback, setFeedback] = useState(null);
+  const [activity, setActivity] = useState([]);
   const [sound, setSound] = useState(!!config.scanner_sound);
   const [counts, setCounts] = useState({
     total: 0,
     success: 0,
     duplicate: 0,
-    rejected: 0,
+    invalid: 0,
   });
   const scanner = useRef(null);
   const lastCameraStop = useRef(0);
@@ -107,6 +106,9 @@ export default function LiveScanner() {
   const mounted = useRef(false);
   const processing = useRef(false);
   const resetTimer = useRef(null);
+  const feedbackAnchor = useRef(null);
+  const scanRequest = useRef(null);
+  const eventId = useRef(0);
   const input = useRef(null);
   const handler = useRef(null);
   const modeRef = useRef(mode);
@@ -145,7 +147,7 @@ export default function LiveScanner() {
     if (mounted.current) {
       setRunning(false);
       setCameraBusy(false);
-      setState("Ready");
+      if (!processing.current) setState("Ready");
     }
   }, [enqueue, clearCamera]);
   const startCamera = useCallback(
@@ -252,7 +254,7 @@ export default function LiveScanner() {
               "",
           );
           setRunning(true);
-          setState("Scanning");
+          if (!processing.current) setState("Scanning");
         } catch (e) {
           await clearCamera();
           if (mounted.current && turn === generation.current) {
@@ -274,10 +276,12 @@ export default function LiveScanner() {
     [enqueue, clearCamera],
   );
   const reset = useCallback(() => {
-    if (!mounted.current || !accessRef.current) return;
+    clearTimeout(resetTimer.current);
+    if (!mounted.current) return;
+    setFeedback(null);
     processing.current = false;
-    setResult(null);
-    setRejection(null);
+    setValue("");
+    if (!accessRef.current) return;
     setState(
       modeRef.current === "camera" && scanner.current?.isScanning
         ? "Scanning"
@@ -288,12 +292,53 @@ export default function LiveScanner() {
     } catch {
       /* Ready to recover manually if camera was stopped. */
     }
-    if (
-      modeRef.current === "hardware" &&
-      document.activeElement === document.body
-    )
-      input.current?.focus();
+    if (modeRef.current === "hardware")
+      requestAnimationFrame(() => {
+        if (mounted.current && accessRef.current && !processing.current)
+          input.current?.focus({ preventScroll: true });
+      });
   }, []);
+  const recordOutcome = useCallback(
+    (event) => {
+      const shownAt = Date.now();
+      const entry = { ...event, shownAt, duration: 4000, id: ++eventId.current };
+      setFeedback(entry);
+      setState(
+        event.kind === "success"
+          ? "Success"
+          : event.kind === "duplicate"
+            ? "Duplicate"
+            : "Error",
+      );
+      setCounts((c) => ({
+        total: c.total + 1,
+        success: c.success + (event.kind === "success" ? 1 : 0),
+        duplicate: c.duplicate + (event.kind === "duplicate" ? 1 : 0),
+        invalid: c.invalid + (event.kind === "invalid" ? 1 : 0),
+      }));
+      // Include rejected station scans alongside successful attendance events.
+      setActivity((items) => [entry, ...items].slice(0, 12));
+      if (soundRef.current) scanSound(event.kind);
+      resetTimer.current = setTimeout(reset, entry.duration);
+    },
+    [reset],
+  );
+  useEffect(() => {
+    if (!feedback) return;
+    const frame = requestAnimationFrame(() => {
+      const element = feedbackAnchor.current;
+      if (!element) return;
+      const bounds = element.getBoundingClientRect();
+      if (bounds.top < 80 || bounds.top > window.innerHeight - 120)
+        element.scrollIntoView({
+          block: "start",
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "instant"
+            : "smooth",
+        });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [feedback]);
   const process = useCallback(
     async (token) => {
       token = token.trim();
@@ -302,8 +347,14 @@ export default function LiveScanner() {
       // oxlint-disable-next-line react-hooks/exhaustive-deps -- timer ref belongs to this station lifecycle, not a DOM node
       clearTimeout(resetTimer.current);
       setState("Processing");
-      setResult(null);
-      setRejection(null);
+      setFeedback(null);
+      const controller = new AbortController();
+      scanRequest.current = controller;
+      let timedOut = false;
+      const requestTimeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, 15000);
       try {
         scanner.current?.pause(true);
       } catch {
@@ -313,47 +364,58 @@ export default function LiveScanner() {
         const response = await apiRequest("/scanner/consume", {
           method: "POST",
           body: JSON.stringify({ token, device_mode: modeRef.current }),
+          signal: controller.signal,
         });
         if (!mounted.current) return;
-        setResult({ ...response, shownAt: Date.now() });
-        setState("Success");
-        setCounts((c) => ({
-          ...c,
-          total: c.total + 1,
-          success: c.success + 1,
-        }));
-        if (soundRef.current) successSound();
-        reloadRecent();
-        resetTimer.current = setTimeout(reset, 4000);
+        recordOutcome({ ...response, kind: "success" });
       } catch (e) {
         if (!mounted.current) return;
-        if (e.name === "AbortError") return;
-        if (
-          e.status === 401 ||
-          (e.status === 403 && (!e.code || e.code === "UNAUTHORIZED_SCANNER"))
-        ) {
-          setAccessError(e.message);
-          setState("Error");
+        if (e.name === "AbortError" && !timedOut) {
+          reset();
           return;
         }
-        const duplicate = ["ALREADY_MARKED", "MEAL_ALREADY_MARKED"].includes(e.code);
-        setState(duplicate ? "Duplicate" : "Error");
-        setRejection({
-          title: errorTitles[e.code] || "Check-in could not be completed",
-          message: e.message,
-          duplicate,
-          original: e.data?.original_time,
+        const error = timedOut
+          ? Object.assign(
+              new Error(
+                "The server took too long to respond. Attendance may have been recorded. Scan a fresh live QR to check safely.",
+              ),
+              { code: "NETWORK_ERROR" },
+            )
+          : e;
+        const blocked =
+          error.status === 401 ||
+          (error.status === 403 && (!error.code || error.code === "UNAUTHORIZED_SCANNER"));
+        const duplicate = ["ALREADY_MARKED", "MEAL_ALREADY_MARKED"].includes(
+          error.code,
+        );
+        const invalidToken =
+          error.status === 422 &&
+          Array.isArray(error.data) &&
+          error.data.some((issue) => issue.loc?.includes("token"));
+        recordOutcome({
+          ...error.data,
+          kind: duplicate ? "duplicate" : "invalid",
+          code: blocked
+            ? "UNAUTHORIZED_SCANNER"
+            : invalidToken ? "QR_INVALID" : error.code,
+          title: blocked
+            ? errorTitles.UNAUTHORIZED_SCANNER
+            : invalidToken
+              ? errorTitles.QR_INVALID
+              : errorTitles[error.code] || "Check-in could not be completed",
+          message: invalidToken
+            ? "This QR does not contain a valid attendance pass. Ask the student to open their live QR in SmartMess."
+            : error.message,
+          meal: error.data?.meal || error.data?.session?.meal,
+          blocked,
         });
-        setCounts((c) => ({
-          ...c,
-          total: c.total + 1,
-          duplicate: c.duplicate + (duplicate ? 1 : 0),
-          rejected: c.rejected + (duplicate ? 0 : 1),
-        }));
-        resetTimer.current = setTimeout(reset, duplicate ? 4000 : 5000);
+        if (blocked) setAccessError(error.message);
+      } finally {
+        clearTimeout(requestTimeout);
+        if (scanRequest.current === controller) scanRequest.current = null;
       }
     },
-    [reloadRecent, reset],
+    [recordOutcome, reset],
   );
   handler.current = process;
   useEffect(() => {
@@ -364,13 +426,13 @@ export default function LiveScanner() {
       generation.current++;
       // oxlint-disable-next-line react-hooks/exhaustive-deps -- mutable timer is owned by this station lifecycle
       clearTimeout(resetTimer.current);
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- cancel this station's pending request during cleanup
+      scanRequest.current?.abort();
       enqueue(clearCamera);
     };
   }, [enqueue, clearCamera]);
   useEffect(() => {
     if (scannerAllowed) return;
-    clearTimeout(resetTimer.current);
-    processing.current = false;
     stopCamera();
   }, [scannerAllowed, stopCamera]);
   useEffect(() => {
@@ -409,10 +471,11 @@ export default function LiveScanner() {
     };
   }, [mode, scannerAllowed]);
   const switchMode = async (next) => {
+    if (processing.current || cameraBusy) return;
     clearTimeout(resetTimer.current);
-    processing.current = false;
-    setResult(null);
-    setRejection(null);
+    setFeedback(null);
+    setValue("");
+    modeRef.current = next;
     setMode(next);
     setState("Ready");
     await stopCamera();
@@ -425,10 +488,16 @@ export default function LiveScanner() {
     setValue("");
     process(token);
   };
-  const remaining = result
+  const scanLocked = state === "Processing" || Boolean(feedback);
+  const remaining = feedback
     ? Math.min(
         4,
-        Math.max(0, 4 - Math.floor((now.getTime() - result.shownAt) / 1000)),
+        Math.max(
+          0,
+          Math.ceil(
+            (feedback.duration - (now.getTime() - feedback.shownAt)) / 1000,
+          ),
+        ),
       )
     : 0;
   if (!scannerAllowed)
@@ -439,6 +508,14 @@ export default function LiveScanner() {
           title="Live attendance scanner"
           description="Scanner access is verified before camera or keyboard scanning starts."
         />
+        <div ref={feedbackAnchor} className="scanner-feedback-anchor">
+          <ScanFeedback
+            feedback={feedback}
+            timezone={config.timezone}
+            remaining={remaining}
+            onDismiss={reset}
+          />
+        </div>
         <Panel title="Scanner access">
           {statusResource.loading ? (
             <Loading rows={2} />
@@ -472,7 +549,7 @@ export default function LiveScanner() {
             <Button
               variant="outline"
               onClick={() => setSound((v) => !v)}
-              aria-label={sound ? "Mute success sound" : "Enable success sound"}
+              aria-label={sound ? "Mute scanner sounds" : "Enable scanner sounds"}
             >
               {sound ? <Volume2 size={15} /> : <VolumeX size={15} />}Sound{" "}
               {sound ? "on" : "off"}
@@ -491,9 +568,18 @@ export default function LiveScanner() {
               </span>
             }
           >
+            <div ref={feedbackAnchor} className="scanner-feedback-anchor">
+              <ScanFeedback
+                feedback={feedback}
+                timezone={config.timezone}
+                remaining={remaining}
+                onDismiss={reset}
+              />
+            </div>
             <div className="tabs" style={{ marginBottom: 22 }}>
               <button
                 className={mode === "camera" ? "active" : ""}
+                disabled={scanLocked || cameraBusy}
                 onClick={() => switchMode("camera")}
               >
                 <Camera
@@ -504,6 +590,7 @@ export default function LiveScanner() {
               </button>
               <button
                 className={mode === "hardware" ? "active" : ""}
+                disabled={scanLocked || cameraBusy}
                 onClick={() => switchMode("hardware")}
               >
                 <Keyboard
@@ -518,7 +605,7 @@ export default function LiveScanner() {
                 id="smartmess-camera"
                 style={{ display: mode === "camera" ? "block" : "none" }}
               />
-              {mode === "camera" && running && (
+              {mode === "camera" && running && !scanLocked && (
                 <div className="scanner-overlay">
                   <div className="scanner-line" />
                 </div>
@@ -545,6 +632,7 @@ export default function LiveScanner() {
                   {mode === "camera" && (
                     <Button
                       loading={cameraBusy}
+                      disabled={scanLocked}
                       style={{ marginTop: 24 }}
                       onClick={() => startCamera(cameraId)}
                     >
@@ -564,6 +652,7 @@ export default function LiveScanner() {
               <div className="scanner-controls">
                 <select
                   aria-label="Camera source"
+                  disabled={scanLocked || cameraBusy}
                   value={cameraId}
                   onChange={(e) => {
                     setCameraId(e.target.value);
@@ -579,7 +668,7 @@ export default function LiveScanner() {
                 </select>
                 <Button
                   variant="outline"
-                  disabled={cameras.length < 2 || cameraBusy}
+                  disabled={cameras.length < 2 || cameraBusy || scanLocked}
                   onClick={() => {
                     const index = cameras.findIndex((c) => c.id === cameraId);
                     const next = cameras[(index + 1) % cameras.length];
@@ -591,6 +680,7 @@ export default function LiveScanner() {
                 <Button
                   variant="outline"
                   loading={cameraBusy}
+                  disabled={scanLocked && !running}
                   onClick={() =>
                     running ? stopCamera() : startCamera(cameraId)
                   }
@@ -600,7 +690,7 @@ export default function LiveScanner() {
                 </Button>
                 <Button
                   variant="ghost"
-                  disabled={cameraBusy}
+                  disabled={cameraBusy || scanLocked}
                   onClick={() => startCamera(cameraId)}
                   aria-label="Restart camera"
                 >
@@ -621,14 +711,14 @@ export default function LiveScanner() {
                     autoComplete="off"
                     spellCheck={false}
                     value={value}
-                    disabled={processing.current}
+                    disabled={scanLocked}
                     onChange={(e) => setValue(e.target.value)}
                   />
                 </Field>
                 <div className="actions" style={{ marginTop: 15 }}>
                   <Button
                     type="submit"
-                    disabled={!value || processing.current}
+                    disabled={!value || scanLocked}
                     loading={state === "Processing"}
                   >
                     <ScanLine size={14} />
@@ -637,6 +727,7 @@ export default function LiveScanner() {
                   <Button
                     type="button"
                     variant="outline"
+                    disabled={scanLocked}
                     onClick={() => input.current?.focus()}
                   >
                     Focus scanner input
@@ -650,83 +741,6 @@ export default function LiveScanner() {
               student access, and duplicate prevention are verified by the
               server.
             </div>
-            {result && (
-              <div className="scan-result" role="status" aria-live="polite">
-                <div className="actions">
-                  <span className="icon-tile tone-success">
-                    <Check size={23} />
-                  </span>
-                  <div>
-                    <h3>Attendance marked successfully</h3>
-                    <p>{result.meal} check-in confirmed</p>
-                  </div>
-                </div>
-                <div className="person">
-                  <Avatar
-                    name={result.student.name}
-                    src={result.student.photo_url}
-                    size={62}
-                  />
-                  <div>
-                    <strong style={{ fontSize: 17 }}>
-                      {result.student.name}
-                    </strong>
-                    <p className="muted">
-                      {result.student.hostel} · Room{" "}
-                      {result.student.room_number}
-                    </p>
-                  </div>
-                </div>
-                <dl className="detail-grid">
-                  {[
-                    ["Roll number", result.student.admission_number],
-                    ["Registration", result.student.registration_number],
-                    ["Meal", result.meal],
-                    [
-                      "Check-in time",
-                      new Date(result.scanned_at).toLocaleString("en-IN", {
-                        timeZone: config.timezone,
-                      }),
-                    ],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <dt>{label}</dt>
-                      <dd>{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-                <p className="small text-success">
-                  Ready for the next student in {remaining}s
-                </p>
-              </div>
-            )}
-            {rejection && (
-              <div
-                className={`scan-result ${rejection.duplicate ? "warning" : "error"}`}
-                role="alert"
-              >
-                <div className="actions">
-                  <AlertCircle size={22} />
-                  <h3>{rejection.title}</h3>
-                </div>
-                <p>{rejection.message}</p>
-                {rejection.original && (
-                  <p>
-                    Original check-in:{" "}
-                    {new Date(rejection.original).toLocaleString("en-IN", {
-                      timeZone: config.timezone,
-                    })}
-                  </p>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={reset}
-                  style={{ marginTop: 15 }}
-                >
-                  Ready for next scan
-                </Button>
-              </div>
-            )}
           </Panel>
         </div>
         <aside className="scanner-side">
@@ -772,13 +786,15 @@ export default function LiveScanner() {
           >
             <div className="scanner-stats">
               {[
-                ["Total scans", counts.total, ""],
-                ["Successful", counts.success, "text-success"],
-                ["Duplicates", counts.duplicate, ""],
-                ["Rejected", counts.rejected, "text-error"],
+                ["Total Scans", counts.total, ""],
+                ["Successful Scans", counts.success, "text-success"],
+                ["Duplicate Scans", counts.duplicate, "text-warning"],
+                ["Invalid Scans", counts.invalid, "text-error"],
               ].map(([label, value, tone]) => (
                 <div className="scanner-stat" key={label}>
-                  <strong className={tone}>{value}</strong>
+                  <strong className={tone}>
+                    <AnimatedScanCount value={value} />
+                  </strong>
                   <small>{label}</small>
                 </div>
               ))}
@@ -822,39 +838,51 @@ export default function LiveScanner() {
             </DataState>
           </Panel>
           <Panel
-            title="Recent check-ins"
-            description="Latest verified attendance"
+            title="Recent scan activity"
+            description="Latest 12 scans from this visit"
           >
-            <DataState resource={recent}>
-              {recent.data?.items.length ? (
-                recent.data.items.map((r) => (
-                  <div className="activity-item" key={r.id}>
-                    <Avatar name={r.name} src={r.photo_url} size={32} />
-                    <div>
-                      <strong>{r.name}</strong>
+            {activity.length ? (
+              <ol className="scanner-activity" aria-label="Recent scan events">
+                {activity.map((event) => (
+                  <li className="activity-item" key={event.id}>
+                    <Avatar
+                      name={event.student?.name || "?"}
+                      src={event.student?.photo_url}
+                      size={32}
+                    />
+                    <div className="scanner-activity-person">
+                      <strong>{event.student?.name || "Unidentified QR"}</strong>
                       <small>
-                        {r.meal_type} ·{" "}
-                        {new Date(r.scanned_at).toLocaleTimeString("en-IN", {
+                        {event.meal || "Meal unverified"} ·{" "}
+                        {new Date(event.shownAt).toLocaleTimeString("en-IN", {
                           timeZone: config.timezone,
                           hour: "2-digit",
                           minute: "2-digit",
+                          second: "2-digit",
                         })}
                       </small>
+                      {event.kind === "invalid" && <small>{event.title}</small>}
                     </div>
-                    <CheckCircle2
-                      size={14}
-                      color="#059669"
-                      style={{ marginLeft: "auto" }}
-                    />
-                  </div>
-                ))
-              ) : (
-                <Empty
-                  title="Ready for the first check-in"
-                  description="Today’s recent scans will appear here."
-                />
-              )}
-            </DataState>
+                    <Badge
+                      tone={
+                        event.kind === "success"
+                          ? "success"
+                          : event.kind === "duplicate" ? "warning" : "error"
+                      }
+                    >
+                      {event.kind === "success"
+                        ? "Success"
+                        : event.kind === "duplicate" ? "Duplicate" : "Invalid"}
+                    </Badge>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <Empty
+                title="Ready for the first scan"
+                description="Successful, duplicate, and invalid scans will appear here."
+              />
+            )}
           </Panel>
         </aside>
       </div>
